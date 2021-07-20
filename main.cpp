@@ -1,7 +1,10 @@
 #include <iostream>
 #ifdef _WIN32
+    typedef uint32_t JitUInt;
     #include <windows.h>
 #else
+    typedef uint64_t JitUInt;
+    #include <signal.h>
     #include <sys/mman.h>
     #ifdef __APPLE__
         #include <sandbox.h>
@@ -29,7 +32,17 @@ inline std::string to_hex(T n) {
 
 byte* allocate_exec(size_t size, byte* p) {
 #ifdef _WIN32
-    return (byte*) VirtualAllocEx(GetCurrentProcess(), 0, 1 << 16, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+    Logger::log("AllocateExec-Win32", LiteralText::of("Allocating executable memory on Win32 platform..."));
+
+    SYSTEM_INFO sysInfo;
+    GetSystemInfo(&sysInfo);
+    void* buffer = VirtualAlloc(nullptr, sysInfo.dwPageSize, MEM_COMMIT, PAGE_READWRITE);
+    std::memcpy(buffer, p, size);
+
+    DWORD dummy;
+    VirtualProtect(buffer, size, PAGE_EXECUTE_READ, &dummy);
+
+    return (byte*) buffer;
 #else
     Logger::log("AllocateExec-Unix", LiteralText::of("Allocating executable memory on UNIX platform..."));
     void* ptr = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -60,6 +73,7 @@ byte* allocate_exec(size_t size, byte* p) {
 #endif
 }
 
+#ifndef _WIN32
 void signalHandler(int signum) {
     std::string sigName = "unknown";
     switch(signum) {
@@ -72,14 +86,14 @@ void signalHandler(int signum) {
     Logger::error("SignalHandler", LiteralText::of("The program will now exit."));
     exit(1);
 }
+#endif
 
-typedef uint64_t (*Function)(uint64_t);
-
-uint64_t test(uint64_t d) {
-    return d + 4;
-}
+typedef JitUInt (*Function)(JitUInt);
 
 int main() {
+#ifndef _WIN32
+    signal(SIGILL, signalHandler);
+#endif
     Logger::info(loggerName, LiteralText::of("Hello, world!"));
     Logger::info(loggerName, LiteralText::of("This is a pure C++ playground!!"));
     Logger::info(loggerName, LiteralText::of("-----------------"));
@@ -106,8 +120,13 @@ int main() {
         // ret lr
         0xc0, 0x03, 0x5f, 0xd6,
 #else
+#ifdef _WIN32
+        // movq %rcx, %rax
+        0x48, 0x89, 0xc8,
+#else
         // movq %rdi, %rax
         0x48, 0x89, 0xf8,
+#endif
         // addq $4, %rax
         0x48, 0x83, 0xc0, 0x04,
         // ret
@@ -138,12 +157,11 @@ int main() {
     }
 #endif
 
-    signal(SIGILL, signalHandler);
     auto func = (Function)p;
 
     srand(time(nullptr));
-    uint64_t payload = rand();
-    uint64_t result = func(payload);
+    JitUInt payload = rand();
+    JitUInt result = func(payload);
 
     Logger::info(loggerName, LiteralText::of("JIT function returns " + std::to_string(payload) + " + 4 = " + std::to_string(result)));
 
