@@ -5,7 +5,7 @@
     #include <windows.h>
 #else
     typedef uint64_t JitUInt;
-    #defome KRand rand
+    #define KRand rand
     #include <csignal>
     #include <sys/mman.h>
     #ifdef __APPLE__
