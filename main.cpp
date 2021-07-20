@@ -1,9 +1,11 @@
 #include <iostream>
 #ifdef _WIN32
-    typedef uint32_t JitUInt;
+    typedef uint64_t JitUInt;
+    #define KRand rand() << 16 | rand
     #include <windows.h>
 #else
     typedef uint64_t JitUInt;
+    #defome KRand rand
     #include <csignal>
     #include <sys/mman.h>
     #ifdef __APPLE__
@@ -160,7 +162,7 @@ int main() {
     auto func = (Function)p;
 
     srand(time(nullptr));
-    JitUInt payload = rand();
+    JitUInt payload = KRand();
     JitUInt result = func(payload);
 
     Logger::info(loggerName, LiteralText::of("JIT function returns " + std::to_string(payload) + " + 4 = " + std::to_string(result)));
