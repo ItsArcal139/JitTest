@@ -4,7 +4,7 @@
     #include <windows.h>
 #else
     typedef uint64_t JitUInt;
-    #include <signal.h>
+    #include <csignal>
     #include <sys/mman.h>
     #ifdef __APPLE__
         #include <sandbox.h>
